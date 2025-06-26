@@ -142,11 +142,7 @@ class Util {
 			
 			wp_update_attachment_metadata( $attachment_id, $attachment_data );
 		}
-<<<<<<< HEAD
 		@unlink( $file );
-=======
-		@unlink( $upload['file'] ); // Ensure $upload['file'] is passed, not an array
->>>>>>> ad2b322 (Updated By Hossein Farahkordmahaleh)
 
 		return $attachment_id;
 	}

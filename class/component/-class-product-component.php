@@ -385,7 +385,6 @@ class Product extends \EasyCMS_WP\Template\Component {
 		ignore_user_abort(true);
 		set_time_limit(0);
 
-<<<<<<< HEAD
 		if ( $this->is_syncing() ) {
 			$this->log( __( 'Sync already running. Cannot start another', 'easycms-wp' ), 'error' );
 			return;
@@ -441,67 +440,6 @@ class Product extends \EasyCMS_WP\Template\Component {
 
 		$this->set_sync_status( false );
 		$this->log( __( '===SYNC ENDED===', 'easycms-wp' ), 'info' );
-=======
-		if ($this->is_syncing()) {
-			$this->log(__('Sync already running. Cannot start another', 'easycms-wp'), 'error');
-			return;
-		}
-
-		$this->set_sync_status(true); // شروع فرآیند همگام‌سازی
-
-		try {
-			if ( EASYCMS_WP_DEBUG ) {
-				$this->log(
-					__( 'This is in DEBUG mode. Deleting all synced product to re-add', 'easycms-wp' ),
-					'info'
-				);
-
-				$args = array(
-					'meta_query' => array(
-						'key'     => 'easycms_pid',
-						'value'   => '',
-						'compare' => 'EXISTS',
-					),
-					'offset'     => 0,
-				);
-
-				while ( ( $products = $this->get_products( 50, $args ) ) ) {
-					foreach ( $products as $pid ) {
-						wp_delete_post( $pid, true );
-					}
-				}
-			}
-
-			$pids = $this->get_synced_pids();
-
-			$this->log(
-				sprintf(
-					'Start running sync.'
-				),
-				'info'
-			);
-
-			$page = 1;
-			$limit = 50;
-
-			$this->log(
-				sprintf(
-					__( 'Getting products WHERE pid NOT IN (%s) LIMIT %d, %d', 'easycms-wp' ),
-					implode( ',', $pids ),
-					$limit,
-					($page - 1) * $limit
-				),
-				'info'
-			);
-
-			$this->fetch_products($pids,$page,$limit);
-		} catch (\Exception $e) {
-			$this->log(sprintf(__('Sync failed: %s', 'easycms-wp'), $e->getMessage()), 'error');
-		} finally {
-			$this->set_sync_status(false); // بازنشانی وضعیت sync
-			$this->log(__('===SYNC ENDED===', 'easycms-wp'), 'info');
-		}
->>>>>>> ad2b322 (Updated By Hossein Farahkordmahaleh)
 	}
 
 	protected function fetch_products($pids, $page, $limit){
@@ -1513,11 +1451,7 @@ class Product extends \EasyCMS_WP\Template\Component {
 						$tmp_attachment_data = array(
 							'post_status' => 'inherit',
 							'post_title'  => $filename,
-<<<<<<< HEAD
 							'post_date'   => date( 'Y-m-d H:i:s', ( $time ? $time : null ) ),
-=======
-							'post_date'   => date( 'Y-m-d H:i:s', ( $time ?? time() ) ), // Ensure $time is defined or use current time
->>>>>>> ad2b322 (Updated By Hossein Farahkordmahaleh)
 							'post_mime_type' => $file_type['type']
 						);
 						require_once ABSPATH . 'wp-admin/includes/image.php';
