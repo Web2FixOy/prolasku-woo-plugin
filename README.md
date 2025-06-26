@@ -87,4 +87,4 @@ WPML STRING TRANSLATIONS
 
 
 #### Update by
-* Hossein Farahkordmahaleh
+* Hossein Farahkordmahaleh -> h.farah61@gmail.com
