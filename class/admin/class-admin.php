@@ -29,6 +29,8 @@ class Admin {
 					EASYCMS_WP_BASE_URI
 				),
 				array( 'jquery' )
+				,time(),// remove for production
+				true// remove for production
 			);
 
 			wp_localize_script( 'easycms_wp_admin', 'EASYCMS_WP', array(

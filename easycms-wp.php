@@ -5,13 +5,13 @@
  * Author URI:	Prolasku.fi
  * Description:	Integrates middleware to sync WordPress data with EasyCMS
  * Plugin URI:  ProLasku
- * Version:	1.0
+ * Version:	1.1
  * Text Domain:	easycms-wp
  */
 
 defined( 'ABSPATH' ) || exit;
 
-defined( 'EASYCMS_WP_VERSION' )              || define( 'EASYCMS_WP_VERSION', 1.0 );
+defined( 'EASYCMS_WP_VERSION' )              || define( 'EASYCMS_WP_VERSION', 1.1 );
 defined( 'EASYCMS_WP_PATH' )                 || define( 'EASYCMS_WP_PATH', sprintf( '%s/', __DIR__ ) );
 defined( 'EASYCMS_WP_CLASS_PATH' )           || define( 'EASYCMS_WP_CLASS_PATH', sprintf( '%sclass/', EASYCMS_WP_PATH ) );
 defined( 'EASYCMS_WP_COMPONENT_PATH' )       || define( 'EASYCMS_WP_COMPONENT_PATH', sprintf( '%scomponent/', EASYCMS_WP_CLASS_PATH ) );

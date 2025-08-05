@@ -176,7 +176,9 @@ abstract class Component {
 	}
 
 	final public function get_module_name() {
-		return strtolower( str_ireplace( 'easycms_wp\\component\\', null, get_class( $this ) ) );
+		return strtolower(str_ireplace('easycms_wp\\component\\', '', get_class($this)));
+		// DEPRECATED :: return strtolower( str_ireplace( 'easycms_wp\\component\\', null, get_class( $this ) ) );
+
 	}
 
 	private function load_config() {

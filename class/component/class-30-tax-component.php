@@ -4,10 +4,11 @@ namespace EasyCMS_WP\Component;
 use \EasyCMS_WP\Log;
 
 class Tax extends \EasyCMS_WP\Template\Component {
-	
+	public $wpdb;
+	public $data_table;
+
 	public function __construct( \EasyCMS_WP\EasyCMS_WP $parent, int $priority = 10 ) {
 		global $wpdb;
-
 		parent::__construct( $parent, $priority );
 
 		$this->wpdb = $wpdb;

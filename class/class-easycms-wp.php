@@ -34,6 +34,8 @@ final class EasyCMS_WP {
 			add_action( 'wp_ajax_easycms_wp_get_logs', array( $this->ajax, 'get_logs' ) );
 			add_action( 'wp_ajax_easycms_wp_clear_logs', array( $this->ajax, 'clear_logs' ) );
 			add_action( 'wp_ajax_easycms_wp_run_component', array( $this->ajax, 'run_component' ) );
+			add_action( 'wp_ajax_easycms_wp_reset_sync_status', array( $this->ajax, 'reset_sync_status' ) );
+			add_action( 'wp_ajax_easycms_wp_delete_all', array( $this->ajax, 'delete_all' ) );
 		}
 	}
 

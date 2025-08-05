@@ -98,12 +98,14 @@ class Util {
 
 
 		// return $wpdb;
+		// Download file
 		$tmp_file = download_url( $url );
 
 		if ( is_wp_error( $tmp_file ) ) {
 			return $tmp_file;
 		}
 
+		// Verify file type
 		$file_type = wp_check_filetype( $filename );
 		$file = array(
 			'name' => $filename,
@@ -112,16 +114,20 @@ class Util {
 			'type'     => $file_type['type'],
 		);
 
+		// Prepare file array
 		$allowed_types = array(
 			'jpg|jpeg|jpe'  => 'image/jpeg',
 			'png'           => 'image/png',
 		);
 
+		// Handle upload
 		$upload = wp_handle_sideload( $file, array( 'test_form' => false, 'mimes' => $allowed_types ), date( 'Y/m', $time ) );
-		if ( ! empty( $upload['error'] ) ) {
-			return new \WP_Error( 'upload_error', $upload['error'] );
+		if (!empty($upload['error'])) {
+			@unlink($tmp_file); // Clean up temp file
+			return new \WP_Error('upload_error', $upload['error']);
 		}
 
+		// Create attachment
 		$tmp_attachment_data = array(
 			'post_status' => 'inherit',
 			'post_title'  => $filename,
@@ -141,8 +147,18 @@ class Util {
 			$attachment_data = wp_generate_attachment_metadata( $attachment_id, $upload['file'] );
 			
 			wp_update_attachment_metadata( $attachment_id, $attachment_data );
+
+			// After wp_update_attachment_metadata()
+			if (!file_exists($upload['file'])) {
+				error_log("CRITICAL: File missing after upload: " . $upload['file']);
+			} else {
+				error_log("File successfully saved at: " . $upload['file']);
+			}
+
 		}
-		@unlink( $file );
+
+		// Clean up ONLY the temporary file (keep the uploaded file!)
+    	@unlink($tmp_file);
 
 		return $attachment_id;
 	}
