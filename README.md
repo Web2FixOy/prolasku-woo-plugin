@@ -1,6 +1,6 @@
 # README #
 
-ProLasku WooCommerce Plugin v.1.0
+ProLasku WooCommerce Plugin v.1.1
 
 ### What is this repository for? ###
 
