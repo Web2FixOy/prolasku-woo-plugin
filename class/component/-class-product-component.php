@@ -16,7 +16,7 @@ class Product extends \EasyCMS_WP\Template\Component {
 			$sitepress->get_settings(),
 			$wpdb,
 			$sitepress,
-			$woocommerce_wpml
+			$woocommerce_wpml->sync_product_data
 		);
 	}
 
@@ -252,120 +252,309 @@ class Product extends \EasyCMS_WP\Template\Component {
 	public function fail_safe() {
 
 	}
-
-	public function sync() {
+	/*public function sync() {
 		ignore_user_abort(true);
-		set_time_limit(0); // Infinite execution time
+		set_time_limit(0);
 
-		if ($this->is_syncing()) {
-			$this->log(__('sync()::Sync already running. Cannot start another', 'easycms-wp'), 'error');
+		if ( $this->is_syncing() ) {
+			$this->log( __( 'Sync already running. Cannot start another', 'easycms-wp' ), 'error' );
 			return;
 		}
 
-		if (EASYCMS_WP_DEBUG) {
-			$this->log(__('sync()::This is in DEBUG mode. Deleting all synced product to re-add', 'easycms-wp'), 'info');
+		if ( EASYCMS_WP_DEBUG ) {
+			$this->log(
+				__( 'This is in DEBUG mode. Deleting all synced product to re-add', 'easycms-wp' ),
+				'info'
+			);
 
-			$args = [
-				'meta_query' => [
-					[
-						'key'     => 'easycms_pid',
-						'value'   => '',
-						'compare' => 'EXISTS',
-					]
-				],
-				'offset' => 0,
-			];
+			$args = array(
+				'meta_query' => array(
+					'key'     => 'easycms_pid',
+					'value'   => '',
+					'compare' => 'EXISTS',
+				),
+				'offset'     => 0,
+			);
 
-			while ($products = $this->get_products(50, $args)) {
-				foreach ($products as $pid) {
-					wp_delete_post($pid, true);
+			while ( ( $products = $this->get_products( 50, $args ) ) ) {
+				foreach ( $products as $pid ) {
+					wp_delete_post( $pid, true );
 				}
 			}
 		}
 
 		$pids = $this->get_synced_pids();
 
-		$this->log(__('sync()::Start running sync.', 'easycms-wp'), 'info');
+		$this->log(
+			sprintf(
+				'Start running sync.'
+			),
+			'info'
+		);
 
-		$this->set_sync_status(true);
-		$this->log(__('sync()::===SYNC STARTED===', 'easycms-wp'), 'info');
+		$page = 1;
+		$limit = 50;
 
-		$this->fetch_products($pids, 1, 10);
+		$this->log(
+			sprintf(
+				__( 'Getting products WHERE pid NOT IN (%s) LIMIT %d, %d', 'easycms-wp' ),
+				implode( ',', $pids ),
+				$limit,
+				($page - 1) * $limit
+			),
+			'info'
+		);
 
-		$this->set_sync_status(false);
-		$this->log(__('sync()::===SYNC ENDED===', 'easycms-wp'), 'info');
+		$cms_products = $this->make_request( '/get_products', 'POST', array(
+			'NOT_IN' => $pids,
+			'start'  => $limit * ($page - 1),
+			'limit'  => $limit,
+		) );
+
+		$this->set_sync_status( true );
+		$this->log( __( '===SYNC STARTED===', 'easycms-wp' ), 'info' );
+		while ( ! is_wp_error( $cms_products ) ) {
+			$this->log(
+				__( 'JSON payload gotten. Proceeding to process', 'easycms-wp' ),
+				'info'
+			);
+
+			$cms_products = json_decode( $cms_products, true );
+			if ( $cms_products ) {
+				if ( empty( $cms_products['OUTPUT'] ) ) {
+					$this->log(
+						__( 'No data in OUTPUT param. I guess this is the end of the page. Terminate', 'easycms-wp' ),
+						'info'
+					);
+
+					break;
+				}
+
+				$this->log(
+					__( 'JSON payload parsed successfully. Proceeding to iterate and add', 'easycms-wp' ),
+					'info'
+				);
+
+				foreach( $cms_products['OUTPUT'] as $product_data ) {
+					$product_data = $this->prepare_product_data( $product_data );
+
+					$this->create_product( $product_data );
+				}
+			} else {
+				$this->log(
+					sprintf(
+						__(
+							'Sync process failed and terminated: Unable to parse JSON payload on page %d and offset %d',
+							'easycms-wp'
+						),
+						$page,
+						($page - 1) * $limit
+					),
+					'error'
+				);
+
+				break;
+			}
+
+			$page++;
+
+			$this->log(
+				sprintf(
+					__( 'Making request for page %d', 'easycms-wp' ),
+					$page
+				),
+				'info'
+			);
+
+			$cms_products = $this->make_request(
+				'/get_products',
+				'POST',
+				array(
+					'NOT_IN' => $pids,
+					'start'  => $limit * ($page - 1),
+					'limit'  => $limit,
+				)
+			);
+		}
+
+		$this->set_sync_status( false );
+		$this->log( __( '===SYNC ENDED===', 'easycms-wp' ), 'info' );
+	}*/
+
+	public function sync() {
+		ignore_user_abort(true);
+		set_time_limit(0);
+
+		if ( $this->is_syncing() ) {
+			$this->log( __( 'Sync already running. Cannot start another', 'easycms-wp' ), 'error' );
+			return;
+		}
+
+		if ( EASYCMS_WP_DEBUG ) {
+			$this->log(
+				__( 'This is in DEBUG mode. Deleting all synced product to re-add', 'easycms-wp' ),
+				'info'
+			);
+
+			$args = array(
+				'meta_query' => array(
+					'key'     => 'easycms_pid',
+					'value'   => '',
+					'compare' => 'EXISTS',
+				),
+				'offset'     => 0,
+			);
+
+			while ( ( $products = $this->get_products( 50, $args ) ) ) {
+				foreach ( $products as $pid ) {
+					wp_delete_post( $pid, true );
+				}
+			}
+		}
+
+		$pids = $this->get_synced_pids();
+
+		$this->log(
+			sprintf(
+				'Start running sync.'
+			),
+			'info'
+		);
+
+		$page = 1;
+		$limit = 50;
+
+		$this->log(
+			sprintf(
+				__( 'Getting products WHERE pid NOT IN (%s) LIMIT %d, %d', 'easycms-wp' ),
+				implode( ',', $pids ),
+				$limit,
+				($page - 1) * $limit
+			),
+			'info'
+		);
+
+		$this->set_sync_status( true );
+		$this->log( __( '===SYNC STARTED===', 'easycms-wp' ), 'info' );
+		$this->fetch_products($pids,$page,$limit);
+
+		$this->set_sync_status( false );
+		$this->log( __( '===SYNC ENDED===', 'easycms-wp' ), 'info' );
 	}
 
-	protected function fetch_products($pids, $page, $limit) {
-		$response = $this->make_request('/get_products', 'POST', [
-			'NOT_IN' => $pids,
-			'start'  => ($page - 1) * $limit,
-			'limit'  => $limit,
-		]);
+	protected function fetch_products($pids, $page, $limit){
+		$cms_products = $this->make_request(
+			'/get_products',
+			'POST',
+			array(
+				'NOT_IN' => $pids,
+				'start'  => ($page - 1) * $limit,
+				'limit'  => $limit,
+			)
+		);
+		$this->log(
+			sprintf(
+				__(
+					'fetch_products:: fetched data is %s', 'easycms-wp'
+				),
+				json_encode($cms_products),
+			),
+			'info'
+		);
 
-		if($page > 1) {
-			// return; // this is for development purposes to only allow 1 page to do debugging!
+		while ( ! is_wp_error($cms_products)) {
+			$this->log(
+				__( 'JSON payload gotten. Proceeding to process', 'easycms-wp' ),
+				'info'
+			);
+
+			$cms_products = json_decode( $cms_products, true );
+
+			if ( $cms_products ) {
+				if ( empty( $cms_products['OUTPUT'] ) ) {
+					$this->log(
+						__( 'No data in OUTPUT param. I guess this is the end of the page. Terminate', 'easycms-wp' ),
+						'info'
+					);
+
+					break;
+				}
+
+				$this->log(
+					__( 'JSON payload parsed successfully. Proceeding to iterate and add', 'easycms-wp' ),
+					'info'
+				);
+				if (!empty( $cms_products['INFO'] ) ) {
+					$this->log(
+						sprintf(
+							__( 'Sync process INFO JSON payload response for page %d and offset %d , COUNT: %d , START: %d , LIMIT: %d , TOTAL COUNT: %d ', 'easycms-wp' ),
+							$page,
+							($page - 1) * $limit,
+							$cms_products['INFO']['count'],
+							$cms_products['INFO']['start'],
+							$cms_products['INFO']['limit'],
+							$cms_products['INFO']['total_count']
+						),
+						'info'
+					);
+				}
+
+				foreach( $cms_products['OUTPUT'] as $product_data ) {
+
+					$product_data = $this->prepare_product_data( $product_data );
+					$this->log(
+						sprintf(
+							__( 'fetch_products::product_data (%s) ', 'easycms-wp' ),
+							json_encode($product_data)
+						),
+						'debug'
+					);
+					$this->create_product( $product_data );
+				}
+			} else {
+				$this->log(
+					sprintf(
+						__(
+							'Sync process failed and terminated: Unable to parse JSON payload on page %d and offset %d',
+							'easycms-wp'
+						),
+						$page,
+						($page - 1) * $limit
+					),
+					'error'
+				);
+
+				break;
+			}
+
+			$_current_total_fetched = (($page - 1) * $limit) + $limit + 1;
+			$page++;
+
+
+
+			// if($page==5) break;
+			$_start = (int)(($page - 1) * $limit);
+			$_total_count = isset($cms_products['INFO']['total_count']) ? (int)$cms_products['INFO']['total_count'] : 0;
+			if($_total_count){
+				if($_total_count > $_current_total_fetched){  // $_current_total_fetched because start is always from 0! total_count is from 1
+					$this->log(
+						sprintf(
+							__( 'Making request for page %d start %d limit %d', 'easycms-wp' ),
+							$page,
+							($page - 1) * $limit,
+							$limit
+						),
+						'info'
+					);
+					$cms_products = $this->fetch_products($pids,$page,$limit);
+				}else{
+					break;
+				}
+			}
 		}
 
-		$this->log(__('fetch_products:: is_syncing is set to: '.($this->is_syncing()===false ? false : ('"'.$this->is_syncing().'"') ), 'easycms-wp'), 'info');
 
-		if (!$this->is_syncing()) {
-			$this->log(__('fetch_products::Sync already stopped. Terminated.', 'easycms-wp'), 'error');
-			return;
-		}
 
-		// $this->log(sprintf(__('fetch_products:: fetched data is %s', 'easycms-wp'), json_encode($response)), 'info');
-
-		if (is_wp_error($response)) {
-			$this->log(__('fetch_products:: Fetch error from API. Terminated.', 'easycms-wp'), 'error');
-			return;
-		}
-
-		$this->log(__('fetch_products:: JSON payload gotten. Proceeding to process', 'easycms-wp'), 'info');
-
-		$data = json_decode($response, true);
-		if (!$data || !is_array($data)) {
-			$this->log(sprintf(__('fetch_products:: Sync failed and terminated: Unable to parse JSON payload on page %d and offset %d', 'easycms-wp'), $page, ($page - 1) * $limit), 'error');
-			return;
-		}
-
-		if (empty($data['OUTPUT'])) {
-			$this->log(__('fetch_products:: No data in OUTPUT param. Terminating.', 'easycms-wp'), 'info');
-			return;
-		}
-
-		$this->log(__('fetch_products:: JSON payload parsed successfully. Proceeding to iterate and add', 'easycms-wp'), 'info');
-
-		if (!empty($data['INFO'])) {
-			$info = $data['INFO'];
-			$this->log(sprintf(__('fetch_products:: Sync process INFO JSON payload response for page %d and offset %d , COUNT: %d , START: %d , LIMIT: %d , TOTAL COUNT: %d ', 'easycms-wp'),
-				$page,
-				($page - 1) * $limit,
-				$info['count'],
-				$info['start'],
-				$info['limit'],
-				$info['total_count']
-			), 'info');
-		}
-
-		foreach ($data['OUTPUT'] as $product_data) {
-			$product_data = $this->prepare_product_data($product_data);
-			$this->log(sprintf(__('fetch_products:: fetch_products::product_data (%s)', 'easycms-wp'), json_encode($product_data)), 'debug');
-			$this->create_product($product_data);
-
-			// Clear references to avoid memory leaks
-			unset($product_data);			
-		}
-
-		$total_count = isset($data['INFO']['total_count']) ? (int) $data['INFO']['total_count'] : 0;
-		$next_offset = $page * $limit;
-
-		unset($response, $data);
-
-		if ($total_count > $next_offset) {
-			$this->log(sprintf(__('fetch_products:: Making request for page %d start %d limit %d', 'easycms-wp'), $page + 1, $next_offset, $limit), 'info');
-			$this->fetch_products($pids, $page + 1, $limit); // Recursive call
-		}
 	}
 
 	public static function can_run() {
@@ -666,7 +855,6 @@ class Product extends \EasyCMS_WP\Template\Component {
 		return $this->productSaveActions->get_element_lang_code( $product_id );
 	}
 
-
 	public function rest_delete_product( \WP_REST_Request $request ) {
 		$pid = absint( $request->get_param( 'pid' ) );
 
@@ -703,69 +891,73 @@ class Product extends \EasyCMS_WP\Template\Component {
 		$product = new \WC_Product();
 		$product->set_id( $product_id );
 		$product->delete();
-		// Clear references to avoid memory leaks
-		unset($product);		
 	}
 
 	public function set_product_params( array $product_data, string $lang, int $product_id = 0, bool $is_parent = true ) {
-		global $wpdb;
-		
-		$this->log(sprintf('Starting set_product_params for %s product ID %d, language %s', 
-			$is_parent ? 'parent' : 'translation', 
-			$product_id, 
-			$lang
-		), 'debug');
-
-		if (!$product_id) {
+		global $wpdb;		
+		if ( ! $product_id ) {
 			$product = new \WC_Product();
-			$this->log('Creating new product object', 'debug');
 		} else {
-			$product = wc_get_product($product_id);
-			$this->log(sprintf('Retrieved existing product ID %d', $product_id), 'debug');
+			$product = wc_get_product( $product_id );
 		}
-		
-		// Set product details
+
 		if ( isset( $product_data['product_name'][ $lang ] ) ) {
 			$product->set_name( sanitize_text_field( $product_data['product_name'][ $lang ] ) );
 		}
+
 		if ( isset( $product_data['product_desc'][ $lang ] ) ) {
 			$string = sanitize_text_field( $product_data['product_desc'][ $lang ] );
 			$string = !empty($string) ? (urldecode(trim($string))) : $string;
-			$string = preg_replace('#<br\s*/?>#i', "\n", $string);
-			$string = htmlspecialchars_decode(trim($string));
+	        $string = preg_replace('#<br\s*/?>#i', "\n", $string);
+	        $string = htmlspecialchars_decode(trim($string));
 			$string = trim($string);
 			$string = ltrim($string);
 			$product->set_description( $string );
 		}
+
 		if ( isset( $product_data['price'] ) ) {
 			$product->set_regular_price( round(floatval( $product_data['price'] ), 3) );
+			// $this->log(
+			// 	sprintf(
+			// 		__( '########### Product Price is now (%s) ', 'easycms-wp' ),
+			// 		round(floatval( $product_data['price'] ), 3)
+			// 	),
+			// 	'info'
+			// );
 		}
+
 		if ( isset( $product_data['discount'] ) ) {
 			$product->set_sale_price( round( round((float)$product_data['price'], 3) * (1 - ( ((float)$product_data['discount']) /100)), 3));
 		}
+
 		if ( isset( $product_data['width'] ) ) {
 			$product->set_width( floatval( $product_data['width'] ) );
 		}
+
 		if ( isset( $product_data['height'] ) ) {
 			$product->set_height( floatval( $product_data['height'] ) );
 		}
+
 		if ( isset( $product_data['length'] ) ) {
 			$product->set_length( floatval( $product_data['length'] ) );
 		}
+
 		if ( isset( $product_data['weight'] ) ) {
 			$product->set_weight( floatval( $product_data['weight'] ) );
 		}
+
 		if ( isset( $product_data['prdStatus'] ) ) {
 			$_prd_status = intval($product_data['prdStatus'])==0 ? 'draft' : 'publish';
 			$product->set_status( $_prd_status );
 		}
 
-		// Handle status based on display dates
+		### here we override status in case there is a CMS prd_start_display or prd_end_display or both
 		$today_date = strtotime("now");
 		if(isset($product_data['prd_start_display']) && isset($product_data['prd_end_display'])){
 			$_prd_status = isset($product_data['prdStatus']) && intval($product_data['prdStatus'])==0 ? 'draft' : 'publish';
 			if($today_date >= $product_data['prd_start_display'] && $today_date <= $product_data['prd_end_display']){
-				// No need to do any changes
+				// $product->set_status( $_prd_status );
+				### no need to do any changes
 			}
 			if($today_date < $product_data['prd_start_display']){
 				$product->set_status( 'draft' );
@@ -775,173 +967,116 @@ class Product extends \EasyCMS_WP\Template\Component {
 			}
 		}
 
-		// Set SKU only for parent product
-		if ( $is_parent && isset( $product_data['barcode'] ) ) {
+
+		if ( isset( $product_data['barcode'] ) && $is_parent ) {
 			$product->set_sku( $product_data['barcode'] );
 		}
-
-		// Handle images for both parent and translations
-		if (!empty($product_data['images']) && is_array($product_data['images'])) {
-			$this->log(sprintf('Processing %d images for product', count($product_data['images'])), 'debug');
-			
+		
+		if ( $is_parent && ! empty( $product_data['images'] ) && is_array( $product_data['images'] ) ) {
 			$gallery_images = array();
-			foreach ($product_data['images'] as $index => $image_data) {
-				$this->log(sprintf('Processing image #%d: %s', $index + 1, $image_data['imgName']), 'debug');
-				
-				if ((bool) $image_data['visible']) {
-					$this->log('Image is marked as visible', 'debug');
-					
-					if (!isset($image_data['URL'])) {
+
+			$this->log(sprintf(
+				__( '##### ------ ###### going to image foreach loop: %s', 'easycms-wp' ),
+				json_encode($product_data['images'])
+			), 'debug');
+
+			foreach ( $product_data['images'] as $image_data ) {
+				if ( (bool) $image_data['visible'] ) {
+					if(!isset($image_data['URL'])){
 						$this->log(
-							sprintf('Skipping image - missing URL: %s', $image_data['imgName']),
-							'warning'
+							sprintf(
+								__( 'we are unable to import product image (%s) as attachment: %s', 'easycms-wp' ),
+								$image_data['imgName'],
+								'Missing URL from the image'
+							),
+							'debug'
 						);
 						continue;
+					}else{
+						$this->log(sprintf(
+							__( '##### ------ ###### inside the image foreach loop: %s', 'easycms-wp' ),
+							json_encode($image_data)
+						), 'debug');
 					}
 
-					$filename = preg_replace('/[^\w.]/', '_', $image_data['imgName']);
-					$title = preg_replace('/\.[^.]+$/', '', basename($filename));
-					
-					$this->log(sprintf('Checking if image exists locally: %s', $filename), 'debug');
+					$filename = preg_replace( '/[^\w.]/', '_', $image_data['imgName'] );
+					// Get file title
+					$title = preg_replace( '/\.[^.]+$/', '', basename( $filename ) );
 					$attachment_id = $this->check_if_local_image_exists($filename, $title, false);
-					
-					if (empty($attachment_id)) {
-						$this->log('Image not found locally, importing from remote', 'debug');
-						
+					### if no image exists
+					if(empty($attachment_id)){
 						$attachment_id = Util::url_to_attachment(
 							$image_data['URL'],
 							$image_data['imgName'],
 							$image_data['imgdate']
 						);
-						
-						if (is_wp_error($attachment_id)) {
-							$this->log(
-								sprintf('Failed to import image: %s', $attachment_id->get_error_message()),
-								'error'
-							);
-							continue;
-						}
-						
-						$this->log(sprintf('Successfully imported image, attachment ID: %d', $attachment_id), 'debug');
-						
-						// Verify image file exists
-						$file_path = get_attached_file($attachment_id);
-						if (!$file_path || !file_exists($file_path)) {
-							$this->log(
-								sprintf('Critical error: Imported image file missing for attachment ID %d', $attachment_id),
-								'error'
-							);
-							continue;
-						}
-						
-						$this->log('Generating image metadata and thumbnails', 'debug');
-						$metadata = wp_generate_attachment_metadata($attachment_id, $file_path);
-						if (empty($metadata)) {
-							$this->log(
-								sprintf('Failed to generate metadata for attachment ID %d', $attachment_id),
-								'error'
-							);
-						} else {
-							wp_update_attachment_metadata($attachment_id, $metadata);
-							$this->log('Successfully generated image metadata', 'debug');
-						}
-					} else {
-						$this->log(sprintf('Using existing attachment ID: %d', $attachment_id), 'debug');
-						
-						// Verify existing image
-						$file_path = get_attached_file($attachment_id);
-						if (!$file_path || !file_exists($file_path)) {
-							$this->log(
-								sprintf('Existing attachment file missing for ID %d - attempting repair', $attachment_id),
-								'warning'
-							);
-							
-							// Attempt to re-download if file is missing
-							$attachment_id = $this->repair_missing_attachment($attachment_id, $image_data);
-							if (is_wp_error($attachment_id)) {
-								$this->log(
-									sprintf('Failed to repair attachment: %s', $attachment_id->get_error_message()),
-									'error'
-								);
-								continue;
-							}
-						}
-					}
+					}		
+
+					$this->log(sprintf(
+						__( '##### ------ ###### data: %s', 'easycms-wp' ),
+						json_encode($attachment_id)
+					), 'debug');
 					
-					$gallery_images[] = $attachment_id;
-					$this->log(sprintf('Added attachment ID %d to gallery', $attachment_id), 'debug');
-				} else {
-					$this->log('Image is not visible - skipping', 'debug');
+
+					if ( ! is_wp_error( $attachment_id ) ) {
+						$gallery_images[] = $attachment_id;
+						$this->log(
+							sprintf(
+								__( 'importing product image (%s) as attachment: %s', 'easycms-wp' ),
+								$image_data['imgName'],
+								$attachment_id
+							),
+							'debug'
+						);
+					} else {
+						$this->log(
+							sprintf(
+								__( 'Unable to import product image (%s) as attachment: %s', 'easycms-wp' ),
+								$image_data['imgName'],
+								$attachment_id->get_error_message()
+							),
+							'warning'
+						);
+					}
 				}
 			}
 
-			if ($gallery_images) {
-				$this->log(sprintf('Setting product images - %d in gallery', count($gallery_images)), 'debug');
-				
-				// Set main image
-				$main_image_id = $gallery_images[0];
-				$product->set_image_id($main_image_id);
-				$this->log(sprintf('Set main image ID: %d', $main_image_id), 'debug');
-				
-				// Set gallery images
+			if ( $gallery_images ) {
+				$product->set_image_id( $gallery_images[0] );
+			}
+
+			
+			### remove the first image from gallery as it was already added to featured products
+			if(!empty($gallery_images)){
 				array_shift($gallery_images);
-				$product->set_gallery_image_ids($gallery_images);
-				$this->log(sprintf('Set gallery image IDs: %s', implode(', ', $gallery_images)), 'debug');
-				
-				// Handle translations
-				if (!$is_parent && function_exists('icl_object_id')) {
-					$this->log('Processing product translation - linking to same images', 'debug');
-					$product->set_image_id($main_image_id);
-					$product->set_gallery_image_ids($gallery_images);
-					$this->log('Translation images set successfully', 'debug');
-				}
-			} else {
-				$this->log('No valid images available for this product', 'warning');
 			}
-		} else {
-			$this->log('No images provided for this product', 'debug');
-		}
 
-		// Add custom metadata
+			$product->set_gallery_image_ids( $gallery_images );
+			
+		}
+		/*$this->log(
+			sprintf(
+				__( 'set_product_params::Product_data %s', 'easycms-wp' ),
+				json_encode($product_data)
+			),
+			'info'
+		);*/
+
 		$product->add_meta_data( 'easycms_data', $product_data );
 
-		$_apply_filters = apply_filters( 'easycms_wp_product_component_before_save_product', $product, $product_data, $lang, $is_parent );
-        // Clear references to avoid memory leaks
-        unset($product_data, $gallery_images, $main_image_id);		
-		return $product;
-	}
-
-	private function safe_import_image($image_data) {
-		// First download the image
-		$attachment_id = Util::url_to_attachment(
-			$image_data['URL'],
-			$image_data['imgName'],
-			$image_data['imgdate']
+		$this->log(
+			sprintf(
+				__( 'set_product_params::product %s lang %s product_data %s is_parent %s', 'easycms-wp' ),
+				json_encode($product),
+				json_encode($lang),
+				json_encode($product_data),
+				json_encode($is_parent)
+			),
+			'debug'
 		);
-		
-		if (is_wp_error($attachment_id)) {
-			return $attachment_id;
-		}
-		
-		// Ensure all image sizes are generated
-		$metadata = false;
-		$full_size_path = get_attached_file($attachment_id);
-		if ($full_size_path && file_exists($full_size_path)) {
-			// Regenerate all image sizes
-			$metadata = wp_generate_attachment_metadata($attachment_id, $full_size_path);
-			wp_update_attachment_metadata($attachment_id, $metadata);
-			
-			// Prevent WPML from duplicating this media
-			if (function_exists('wpml_add_translatable_content')) {
-				global $sitepress;
-				$sitepress->set_setting('media_files_duplicate', 0);
-			}
-		}
+		$_apply_filters = apply_filters( 'easycms_wp_product_component_before_save_product', $product, $product_data, $lang, $is_parent );
 
-		// Clear references to avoid memory leaks
-		unset($full_size_path, $metadata);
-		
-		return $attachment_id;
+		return $product;
 	}
 
 	public function sync_translation_products( int $parent_product_id, array $product_ids ) {
@@ -1316,11 +1451,7 @@ class Product extends \EasyCMS_WP\Template\Component {
 						$tmp_attachment_data = array(
 							'post_status' => 'inherit',
 							'post_title'  => $filename,
-<<<<<<< HEAD
 							'post_date'   => date( 'Y-m-d H:i:s', ( $time ? $time : null ) ),
-=======
-							'post_date'   => date( 'Y-m-d H:i:s', ( $time ?? time() ) ), // Ensure $time is defined or use current time
->>>>>>> ad2b322 (Updated By Hossein Farahkordmahaleh)
 							'post_mime_type' => $file_type['type']
 						);
 						require_once ABSPATH . 'wp-admin/includes/image.php';
@@ -1354,7 +1485,6 @@ class Product extends \EasyCMS_WP\Template\Component {
 		return false;
 	}
 
-
 	public function rest_test_product( \WP_REST_Request $request ) {
 		$pid = absint( $request->get_param( 'pid' ) );
 
@@ -1365,7 +1495,6 @@ class Product extends \EasyCMS_WP\Template\Component {
 
 		return $this->rest_response( __( 'Product not found', 'easycms-wp' ), 'FAIL', 404 );
 	}
-
 
 }
 ?>
