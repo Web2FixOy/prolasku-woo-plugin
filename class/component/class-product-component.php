@@ -1316,11 +1316,7 @@ class Product extends \EasyCMS_WP\Template\Component {
 						$tmp_attachment_data = array(
 							'post_status' => 'inherit',
 							'post_title'  => $filename,
-<<<<<<< HEAD
 							'post_date'   => date( 'Y-m-d H:i:s', ( $time ? $time : null ) ),
-=======
-							'post_date'   => date( 'Y-m-d H:i:s', ( $time ?? time() ) ), // Ensure $time is defined or use current time
->>>>>>> ad2b322 (Updated By Hossein Farahkordmahaleh)
 							'post_mime_type' => $file_type['type']
 						);
 						require_once ABSPATH . 'wp-admin/includes/image.php';
