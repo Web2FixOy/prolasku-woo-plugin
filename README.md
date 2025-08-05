@@ -3,9 +3,9 @@
 ProLasku WooCommerce Plugin v.1.1
 
 ### What is this repository for? ###
-
+* Wordpress version >= 6.8.2
 * The plugin will enable synchronisation between WooCommerce and PL CMS for products, categories, taxes, brands, customers and orders
-* Version 1.0
+* Version 1.1
 * [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
 
 ### How do I get set up? ###
