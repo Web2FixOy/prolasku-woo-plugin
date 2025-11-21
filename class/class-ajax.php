@@ -169,5 +169,53 @@ class Ajax {
 	}
 
 
+	public function delete_unsynced_products() {
+		if ( $this->nonce_verify() ) {
+			$language_code = isset( $_POST['language_code'] ) ? sanitize_text_field( $_POST['language_code'] ) : 'all';
+			$product_component = $this->parent->get_component_instance( 'product' );
+			if ( $product_component ) {
+				$results = $product_component->delete_unsynced_products( $language_code );
+				wp_send_json_success( $results );
+			} else {
+				wp_send_json_error( __( 'Product component not found', 'easycms-wp' ) );
+			}
+		} else {
+			wp_send_json_error( __( 'Unauthorized request', 'easycms-wp' ) );
+		}
+	}
+
+	/**
+	 * Delete a single product
+	 */
+	public function delete_single_product() {
+		if ( $this->nonce_verify() ) {
+			$product_id = isset( $_POST['product_id'] ) ? absint( $_POST['product_id'] ) : 0;
+			
+			if ( ! $product_id ) {
+				wp_send_json_error( __( 'Invalid product ID', 'easycms-wp' ) );
+				return;
+			}
+			
+			// Check if product exists
+			$product = get_post( $product_id );
+			if ( ! $product || $product->post_type !== 'product' ) {
+				wp_send_json_error( __( 'Product not found', 'easycms-wp' ) );
+				return;
+			}
+			
+			// Delete the product
+			$result = wp_delete_post( $product_id, true );
+			
+			if ( $result !== false && $result !== null ) {
+				wp_send_json_success( array(
+					'message' => sprintf( __( 'Product "%s" (ID: %d) deleted successfully', 'easycms-wp' ), $product->post_title, $product_id )
+				) );
+			} else {
+				wp_send_json_error( __( 'Failed to delete product', 'easycms-wp' ) );
+			}
+		} else {
+			wp_send_json_error( __( 'Unauthorized request', 'easycms-wp' ) );
+		}
+	}
 }
 ?>

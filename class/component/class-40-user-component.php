@@ -73,8 +73,35 @@ class User extends \EasyCMS_WP\Template\Component
                 'info'
             );
 
+            // Get the current user data to check if password was changed
+            $current_user = get_user_by('id', $user_id);
+            $password_changed = ($current_user->user_pass !== $old_user_data->user_pass);
+            
             $data = (array)$this->get_cms_data($user_id);
-            $data['customer_password'] = $data['password'];
+            
+            // If password was changed, use the new password from WordPress
+            if ($password_changed) {
+                $data['customer_password'] = $current_user->user_pass;
+                $this->log(__('Password was changed, using new password from WordPress', 'easycms-wp'), 'info');
+                $this->log(
+                    sprintf(
+                        __('DEBUG: Sending new password to CMS: %s', 'easycms-wp'),
+                        $current_user->user_pass
+                    ),
+                    'info'
+                );
+            } else {
+                $data['customer_password'] = $data['password'] ?? '';
+                $this->log(__('Password was not changed, using existing password from CMS data', 'easycms-wp'), 'info');
+                $this->log(
+                    sprintf(
+                        __('DEBUG: Sending existing password to CMS: %s', 'easycms-wp'),
+                        $data['customer_password']
+                    ),
+                    'info'
+                );
+            }
+            
             unset($data['password']);
             $data = $this->set_cms_params($user_id, false, $data);
 
@@ -85,13 +112,6 @@ class User extends \EasyCMS_WP\Template\Component
                 ),
                 'info'
             );
-            // $this->log(
-            // 	sprintf(
-            // 		__( '###### CASE 1::update_profile $user->data->user_pass %s', 'easycms-wp' ),
-            // 		$data['customer_password']
-            // 	),
-            // 	'info'
-            // );
 
             if ($data) {
                 $request = $this->make_request('/set_customer_update_profile_wp', 'POST', $data);
@@ -428,11 +448,11 @@ class User extends \EasyCMS_WP\Template\Component
                 ),
                 'error'
             );
-            if ($this->$number_of_tries == 0) {
-                $this->$number_of_tries++;
+            if ($this->number_of_tries == 0) {
+                $this->number_of_tries++;
                 $this->log(
                     sprintf(
-                        __('Trying to call the sync_to_cms() function now...' . ($this->$number_of_tries), 'easycms-wp')
+                        __('Trying to call the sync_to_cms() function now...' . ($this->number_of_tries), 'easycms-wp')
                     ),
                     'info'
                 );
@@ -448,14 +468,14 @@ class User extends \EasyCMS_WP\Template\Component
 
     public function sync()
     {
-
-        add_filter('send_password_change_email', '__return_false');
-        add_filter('wpmu_signup_user_notification', '__return_false');
-
         if ($this->is_syncing()) {
             $this->log(__('Sync already running. Cannot start another', 'easycms-wp'), 'error');
             return;
         }
+        
+        // Only disable password change emails during sync
+        add_filter('send_password_change_email', '__return_false');
+        add_filter('wpmu_signup_user_notification', '__return_false');
 
         ignore_user_abort(true);
         set_time_limit(0);
@@ -517,6 +537,10 @@ class User extends \EasyCMS_WP\Template\Component
         }
         $this->log(__('===SYNC ENDED===', 'easycms-wp'), 'info');
         $this->set_sync_status(false);
+
+        // Re-enable password change emails after sync
+        remove_filter('send_password_change_email', '__return_false');
+        remove_filter('wpmu_signup_user_notification', '__return_false');
 
         ignore_user_abort(false);
     }
@@ -598,10 +622,10 @@ class User extends \EasyCMS_WP\Template\Component
             foreach ($users as $user_id) {
                 if (!empty($argument_WP_user_id)) {### if a specific user id was passed to the argument only add that user to CMS
                     if ($argument_WP_user_id == $user_id) {
-                        $this->register_user($user_id, array('language_id' => $language_id, 'language' => $act));
+                        $this->register_user($user_id, array('language_id' => $language_id, 'language' => $active_lang));
                     }
                 } else {
-                    $this->register_user($user_id, array('language_id' => $language_id, 'language' => $act));
+                    $this->register_user($user_id, array('language_id' => $language_id, 'language' => $active_lang));
                 }
             }
 
@@ -635,19 +659,34 @@ class User extends \EasyCMS_WP\Template\Component
             }
         }
 
+        // Handle email and login name - email is required
         if (isset($params['email']) && filter_var($params['email'], FILTER_VALIDATE_EMAIL)) {
             $args['user_email'] = $params['email'];
             $args['user_login'] = $params['email'];
+        } else {
+            // If email is missing or invalid, we can't create the user
+            // This will be handled in register_wp_user function
+            return array();
         }
 
-        if (isset($params['firstname'])) {
+        // Handle first name - use email prefix if missing
+        if (!empty($params['firstname'])) {
             $args['first_name'] = $params['firstname'];
             $args['meta']['billing_first_name'] = $params['firstname'];
+        } else {
+            // Use part of email as first name if missing
+            $email_parts = explode('@', $params['email']);
+            $args['first_name'] = ucfirst($email_parts[0]);
+            $args['meta']['billing_first_name'] = ucfirst($email_parts[0]);
         }
 
-        if (isset($params['lastname'])) {
+        // Handle last name - use "Missing!" if empty
+        if (!empty($params['lastname'])) {
             $args['last_name'] = $params['lastname'];
             $args['meta']['billing_last_name'] = $params['lastname'];
+        } else {
+            $args['last_name'] = 'Missing!';
+            $args['meta']['billing_last_name'] = 'Missing!';
         }
 
         if (isset($params['language'])) {
@@ -663,56 +702,75 @@ class User extends \EasyCMS_WP\Template\Component
             }
         }
 
-        if (isset($params['company'])) {
+        // Handle company - leave empty if missing
+        if (!empty($params['company'])) {
             $args['meta']['billing_company'] = $params['company'];
             $args['meta']['shipping_company'] = $params['company'];
         }
 
-        if (isset($params['address'])) {
+        // Handle address - leave empty if missing
+        if (!empty($params['address'])) {
             $args['meta']['billing_address_1'] = $params['address'];
         }
 
-        if (isset($params['address_2'])) {
+        // Handle address_2 - leave empty if missing
+        if (!empty($params['address_2'])) {
             $args['meta']['billing_address_2'] = $params['address_2'];
         }
 
-        if (isset($params['city_id'])) {
+        // Handle city_id - leave empty if missing
+        if (!empty($params['city_id'])) {
             $args['meta']['billing_city'] = $params['city_id'];
         }
 
-        if (isset($params['postal'])) {
+        // Handle postal - leave empty if missing
+        if (!empty($params['postal'])) {
             $args['meta']['billing_postcode'] = $params['postal'];
         }
 
-        if (isset($params['state'])) {
+        // Handle state - leave empty if missing
+        if (!empty($params['state'])) {
             $args['meta']['billing_state'] = $params['state'];
         }
 
         if (!empty($params['city_id'])) {
-            $args['meta']['billing_city'] = $this->get_city_by_id($params['city_id']);
+            $city_name = $this->get_city_by_id($params['city_id']);
+            if ($city_name) {
+                $args['meta']['billing_city'] = $city_name;
+            }
         }
 
         if (!empty($params['country_id'])) {
-            $args['meta']['billing_country'] = $this->get_country_by_id($params['country_id']);
+            $country_code = $this->get_country_by_id($params['country_id']);
+            if ($country_code) {
+                $args['meta']['billing_country'] = $country_code;
+            }
         }
 
-        if (isset($params['billing_email'])) {
+        // Handle billing_email - use user email if missing
+        if (!empty($params['billing_email'])) {
             $args['meta']['billing_email'] = $params['billing_email'];
+        } else {
+            $args['meta']['billing_email'] = $params['email'];
         }
 
-        if (isset($params['billing_phone'])) {
+        // Handle billing_phone - leave empty if missing
+        if (!empty($params['billing_phone'])) {
             $args['meta']['billing_phone'] = $params['billing_phone'];
         }
 
-        if (isset($params['shipping_address'])) {
+        // Handle shipping_address - leave empty if missing
+        if (!empty($params['shipping_address'])) {
             $args['meta']['shipping_address'] = $params['shipping_address'];
         }
 
-        if (isset($params['shipping_postal'])) {
+        // Handle shipping_postal - leave empty if missing
+        if (!empty($params['shipping_postal'])) {
             $args['meta']['shipping_postcode'] = $params['shipping_postal'];
         }
 
-        if (isset($params['shipping_state'])) {
+        // Handle shipping_state - leave empty if missing
+        if (!empty($params['shipping_state'])) {
             $args['meta']['shipping_state'] = $params['shipping_state'];
         }
 
@@ -857,6 +915,15 @@ class User extends \EasyCMS_WP\Template\Component
 
 
             if ($user) {
+                // Debug logging - show the password being sent for generated passwords
+                $this->log(
+                    sprintf(
+                        __('DEBUG: Sending generated password to CMS: %s', 'easycms-wp'),
+                    $user->data->user_pass
+                    ),
+                    'info'
+                );
+                
                 $req = $this->make_request('/set_customer_update_profile_wp', 'POST', array(
                     'email' => $user->data->user_email,
                     'customer_password' => $user->data->user_pass
@@ -914,6 +981,19 @@ class User extends \EasyCMS_WP\Template\Component
     public function register_wp_user(array $data)
     {
 
+        // Check if email is missing - if so, skip this user
+        if (empty($data['email']) || !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            $this->log(
+                sprintf(
+                    __('Skipping user with customer_id %d - missing or invalid email: %s', 'easycms-wp'),
+                    $data['customer_id'] ?? 'unknown',
+                    $data['email'] ?? 'empty'
+                ),
+                'error'
+            );
+            return false;
+        }
+
         $this->log(
             sprintf(
                 __('Creating user with customer_id %d on WP', 'easycms-wp'),
@@ -928,11 +1008,19 @@ class User extends \EasyCMS_WP\Template\Component
             $this->log(__('Customer already exists. Updating...', 'easycms-wp'), 'info');
         }
 
+        // Always disable password change emails when creating/updating users through sync
+        // This prevents emails being sent when we create users during sync
+        add_filter('send_password_change_email', '__return_false');
+        
         remove_action('user_register', array($this, 'register_user'));
         remove_action('profile_update', array($this, 'update_profile'), 10, 2);
         $user_id = wp_insert_user($args);
         add_action('user_register', array($this, 'register_user'));
         add_action('profile_update', array($this, 'update_profile'), 10, 2);
+        
+        // Re-enable password change emails after user creation/update
+        // This allows password reset emails to work when users reset their own passwords
+        remove_filter('send_password_change_email', '__return_false');
 
         if (is_wp_error($user_id)) {
             $this->log(
@@ -1208,13 +1296,22 @@ class User extends \EasyCMS_WP\Template\Component
                     case 'firstname':
                     case 'shipping_address':
                     case 'delivery_contact_person':
-                        if (isset($_POST[$usrv[0]])) $data[$usrk] = rtrim(trim(($_POST[$usrv[0]] ?? '') . ' ' . ($_POST[$usrv[1]] ?? '') . ' ' . ($_POST[$usrv[2]] ?? '')));
+                        // Check if $usrv is an array and has enough elements
+                        if (is_array($usrv)) {
+                            $part1 = isset($_POST[$usrv[0]]) ? $_POST[$usrv[0]] : '';
+                            $part2 = isset($_POST[$usrv[1]]) ? $_POST[$usrv[1]] : '';
+                            $part3 = isset($_POST[$usrv[2]]) ? $_POST[$usrv[2]] : '';
+                            $data[$usrk] = rtrim(trim($part1 . ' ' . $part2 . ' ' . $part3));
+                        } else {
+                            // If $usrv is not an array, treat it as a single key
+                            $data[$usrk] = isset($_POST[$usrv]) ? $_POST[$usrv] : '';
+                        }
                         break;
                     case 'different_shipping_address':
-                        if (isset($_POST[$usrv])) $data[$usrk] = isset($_POST[$usrv]) && !empty($_POST[$usrv]) ? 1 : 0;
+                        $data[$usrk] = isset($_POST[$usrv]) && !empty($_POST[$usrv]) ? 1 : 0;
                         break;
                     default:
-                        if (isset($_POST[$usrv])) $data[$usrk] = isset($_POST[$usrv]) ? $_POST[$usrv] : '';
+                        $data[$usrk] = isset($_POST[$usrv]) ? $_POST[$usrv] : '';
                 }
 
             }
@@ -1339,7 +1436,16 @@ class User extends \EasyCMS_WP\Template\Component
                         case 'firstname':
                         case 'shipping_address':
                         case 'delivery_contact_person':
-                            $data[$usrk] = rtrim(trim(($WP_udata[$usrv[0]] ?? '') . ' ' . ($WP_udata[$usrv[1]] ?? '') . ' ' . ($WP_udata[$usrv[2]] ?? '')));
+                            // Check if $usrv is an array and has enough elements
+                            if (is_array($usrv)) {
+                                $part1 = isset($usrv[0]) ? ($WP_udata[$usrv[0]] ?? '') : '';
+                                $part2 = isset($usrv[1]) ? ($WP_udata[$usrv[1]] ?? '') : '';
+                                $part3 = isset($usrv[2]) ? ($WP_udata[$usrv[2]] ?? '') : '';
+                                $data[$usrk] = rtrim(trim($part1 . ' ' . $part2 . ' ' . $part3));
+                            } else {
+                                // If $usrv is not an array, treat it as a single key
+                                $data[$usrk] = isset($WP_udata[$usrv]) ? $WP_udata[$usrv] : '';
+                            }
                             break;
                         case 'different_shipping_address':
                             $data[$usrk] = isset($WP_udata[$usrv]) && !empty($WP_udata[$usrv]) ? 1 : 0;

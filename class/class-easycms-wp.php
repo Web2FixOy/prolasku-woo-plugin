@@ -184,6 +184,14 @@ final class EasyCMS_WP {
 		update_option( EASYCMS_WP_CONFIG, $this->config );
 		do_action( 'easycms_wp_config_updated', $this->config, $this );
 	}
+	
+	/**
+		* Public method to reload configuration from database
+		* This is useful for ensuring the latest config is loaded after updates
+		*/
+	public function reload_config() {
+		return $this->_load_config();
+	}
 
 	public function perform_cron() {
 		foreach ( $this->components as $component ) {

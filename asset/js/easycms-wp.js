@@ -164,4 +164,123 @@ jQuery(document).ready( $ => {
 		}
 	});
 
+	// Tab state persistence
+	function saveTabState(tab, subtab) {
+		if (typeof(Storage) !== "undefined") {
+			localStorage.setItem('easycms_wp_active_tab', tab);
+			if (subtab) {
+				localStorage.setItem('easycms_wp_active_subtab', subtab);
+			} else {
+				localStorage.removeItem('easycms_wp_active_subtab');
+			}
+		}
+	}
+
+	function restoreTabState() {
+		if (typeof(Storage) !== "undefined") {
+			const savedTab = localStorage.getItem('easycms_wp_active_tab');
+			const savedSubtab = localStorage.getItem('easycms_wp_active_subtab');
+			
+			if (savedTab) {
+				// Find and click the saved tab
+				$(`.nav-tab[href*="easycms_wp_tab=${savedTab}"]`).click();
+				
+				if (savedSubtab && savedTab === 'configurations') {
+					// Find and click the saved subtab
+					setTimeout(() => {
+						$(`.subtab[href*="easycms_wp_subtab=${savedSubtab}"]`).click();
+					}, 100);
+				}
+			}
+		}
+	}
+
+	// Handle tab clicks
+	$(document).on('click', '.nav-tab', function(e) {
+		const href = $(this).attr('href');
+		const tabMatch = href.match(/easycms_wp_tab=([^&]+)/);
+		if (tabMatch) {
+			const tab = tabMatch[1];
+			const subtabMatch = href.match(/easycms_wp_subtab=([^&]+)/);
+			const subtab = subtabMatch ? subtabMatch[1] : null;
+			saveTabState(tab, subtab);
+		}
+	});
+
+	// Handle subtab clicks
+	$(document).on('click', '.subtab', function(e) {
+		const href = $(this).attr('href');
+		const tabMatch = href.match(/easycms_wp_tab=([^&]+)/);
+		const subtabMatch = href.match(/easycms_wp_subtab=([^&]+)/);
+		if (tabMatch && subtabMatch) {
+			const tab = tabMatch[1];
+			const subtab = subtabMatch[1];
+			saveTabState(tab, subtab);
+		}
+	});
+
+	// Restore tab state on page load
+	restoreTabState();
+
+	// Password hash settings form handling
+	$('#password-hash-settings-form').on('submit', function(e) {
+		e.preventDefault();
+		
+		const formData = $(this).serialize();
+		const $saveStatusIndicator = $('#password-hash-save-status');
+		
+		$.ajax({
+			url: EASYCMS_WP.ajax_url,
+			type: 'POST',
+			data: formData + '&action=save_password_hash_settings&easycms_wp_nonce=' + EASYCMS_WP.nonce,
+			dataType: 'json',
+			beforeSend: function() {
+				$saveStatusIndicator.text('Saving...').css('color', '#666');
+			},
+			success: function(response) {
+				if (response.success) {
+					$saveStatusIndicator.text('Saved!').css('color', '#46b450');
+					
+					// Update status indicator
+					const isEnabled = $('#prolasku_password_hash_enabled').is(':checked');
+					const $statusIndicator = $('#password-hash-status');
+					
+					if (isEnabled) {
+						$statusIndicator.text('Enabled').removeClass('status-disabled').addClass('status-enabled');
+					} else {
+						$statusIndicator.text('Disabled').removeClass('status-enabled').addClass('status-disabled');
+					}
+					
+					// Show success message
+					const $successNotice = $('<div class="notice notice-success is-dismissible"><p>' + response.data.message + '</p></div>');
+					$('.notice').remove();
+					$('h1').after($successNotice);
+					
+					// Auto-hide the success message after 3 seconds
+					setTimeout(function() {
+						$successNotice.fadeOut();
+					}, 3000);
+				} else {
+					$saveStatusIndicator.text('Error: ' + (response.data || 'Unknown error')).css('color', '#dc3232');
+				}
+			},
+			error: function(xhr, status, error) {
+				$saveStatusIndicator.text('Error: ' + error).css('color', '#dc3232');
+				console.error('AJAX Error:', error);
+			}
+		});
+	});
+
+	// Handle password hash checkbox change
+	$('#prolasku_password_hash_enabled').on('change', function() {
+		const isEnabled = $(this).is(':checked');
+		const $statusIndicator = $('#password-hash-status');
+		
+		if (isEnabled) {
+			$statusIndicator.text('Will be enabled after save').removeClass('status-disabled').addClass('status-enabled');
+		} else {
+			$statusIndicator.text('Will be disabled after save').removeClass('status-enabled').addClass('status-disabled');
+		}
+	});
+
 })

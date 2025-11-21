@@ -8,10 +8,25 @@ class Brand extends \EasyCMS_WP\Template\Component {
 	public $taxonomy = 'product_brand';
 
 	public static function can_run() {
+		// Include compatibility functions if not already loaded
+		if ( ! function_exists( 'prolasku_wpml_dependencies_ok' ) ) {
+			$compat_file = EASYCMS_WP_CLASS_PATH . 'wpml-compatibility.php';
+			if ( file_exists( $compat_file ) ) {
+				require_once( $compat_file );
+			}
+		}
+		
+		// Safe fallback if compatibility function doesn't exist
+		$wpml_ok = function_exists( 'prolasku_wpml_dependencies_ok' )
+			? prolasku_wpml_dependencies_ok()
+			: ( isset( $GLOBALS['woocommerce_wpml'] ) && property_exists( $GLOBALS['woocommerce_wpml'], 'dependencies_are_ok' )
+				? $GLOBALS['woocommerce_wpml']->dependencies_are_ok
+				: true );
+		
 		if (
 			! class_exists( 'WooCommerce' ) ||
 			! class_exists( 'woocommerce_wpml' ) ||
-			! $GLOBALS['woocommerce_wpml']->dependencies_are_ok
+			! $wpml_ok
 		) {
 			Log::log(
 				'brand',
